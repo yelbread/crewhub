@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
+
 import { Project, JoinRequest, GitHubProjectStats } from '../types.ts';
+
 import { useAuth } from '../context/AuthContext.tsx';
+
 import { getProjectTheme } from '../utils/themeStyles.ts';
+
 import {
   collection,
   query,
@@ -10,7 +14,9 @@ import {
   doc,
   updateDoc,
 } from 'firebase/firestore';
+
 import { db, handleFirestoreError, OperationType } from '../firebase.ts';
+
 import {
   CheckCircle2,
   XCircle,
@@ -29,7 +35,11 @@ interface DashboardProps {
   onOpenChat: (project: Project) => void;
   onSelectProject: (project: Project) => void;
   onCreateProject: () => void;
-  onUpdateProjectRoster: (projectId: string, newMember: any, filledRole: string) => void;
+  onUpdateProjectRoster: (
+    projectId: string,
+    newMember: any,
+    filledRole: string
+  ) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -41,7 +51,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const { userProfile } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'active' | 'sent' | 'received'>('active');
+  const [activeTab, setActiveTab] = useState<
+    'active' | 'sent' | 'received'
+  >('active');
+
   const [receivedRequests, setReceivedRequests] = useState<JoinRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<JoinRequest[]>([]);
   const [syncingGh, setSyncingGh] = useState<string | null>(null);
@@ -51,7 +64,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Filter user's active projects (where user is leader OR member)
   const myProjects = projects.filter((p) => {
     if (!userProfile) return false;
-    return p.leaderId === userProfile.id || p.memberIds?.includes(userProfile.id);
+
+    return (
+      p.leaderId === userProfile.id ||
+      p.memberIds?.includes(userProfile.id) ||
+      p.members?.some((m) => m.userId === userProfile.id)
+    );
   });
 
   // Real-time Firestore listeners for Pending Requests
@@ -67,7 +85,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       qReceived,
       (snap) => {
         const list: JoinRequest[] = [];
-        snap.forEach((d) => list.push({ id: d.id, ...d.data() } as JoinRequest));
+        snap.forEach((d) =>
+          list.push({ id: d.id, ...d.data() } as JoinRequest)
+        );
         setReceivedRequests(list);
       },
       (error) => {
@@ -84,7 +104,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       qSent,
       (snap) => {
         const list: JoinRequest[] = [];
-        snap.forEach((d) => list.push({ id: d.id, ...d.data() } as JoinRequest));
+        snap.forEach((d) =>
+          list.push({ id: d.id, ...d.data() } as JoinRequest)
+        );
         setSentRequests(list);
       },
       (error) => {
@@ -115,10 +137,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         joinedAt: new Date().toISOString(),
       };
 
-      onUpdateProjectRoster(request.projectId, newMember, request.roleAppliedFor);
+      onUpdateProjectRoster(
+        request.projectId,
+        newMember,
+        request.roleAppliedFor
+      );
 
       setReceivedRequests((prev) =>
-        prev.map((r) => (r.id === request.id ? { ...r, status: 'accepted' } : r))
+        prev.map((r) =>
+          r.id === request.id ? { ...r, status: 'accepted' } : r
+        )
       );
     } catch (err) {
       console.warn('Accept request fallback:', err);
@@ -134,7 +162,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       });
 
       setReceivedRequests((prev) =>
-        prev.map((r) => (r.id === request.id ? { ...r, status: 'declined' } : r))
+        prev.map((r) =>
+          r.id === request.id ? { ...r, status: 'declined' } : r
+        )
       );
     } catch (err) {
       console.warn('Decline request fallback:', err);
@@ -142,15 +172,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   // Live polling of GitHub progress from real GitHub API
-  const handleSyncGithub = async (project: Project, customRepoUrl?: string) => {
+  const handleSyncGithub = async (
+    project: Project,
+    customRepoUrl?: string
+  ) => {
     const targetUrl = customRepoUrl || project.githubRepo;
+
     if (!targetUrl) return;
 
     setSyncingGh(project.id);
+
     try {
-      const res = await fetch(`/api/sync/github?repoUrl=${encodeURIComponent(targetUrl.trim())}`);
+      const res = await fetch(
+        `/api/sync/github?repoUrl=${encodeURIComponent(targetUrl.trim())}`
+      );
+
       if (res.ok) {
         const ghData = await res.json();
+
         const updatedStats: GitHubProjectStats = {
           closedIssues: ghData.openIssues || 0,
           totalIssues: ghData.openIssues || 0,
@@ -163,6 +202,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         };
 
         project.githubStats = updatedStats;
+
         if (customRepoUrl) {
           project.githubRepo = customRepoUrl.trim();
         }
@@ -170,7 +210,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         // Persist directly to Firestore
         await updateDoc(doc(db, 'projects', project.id), {
           githubStats: updatedStats,
-          ...(customRepoUrl ? { githubRepo: customRepoUrl.trim() } : {}),
+          ...(customRepoUrl
+            ? { githubRepo: customRepoUrl.trim() }
+            : {}),
           updatedAt: new Date().toISOString(),
         });
       } else {
@@ -184,7 +226,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const pendingReceived = receivedRequests.filter((r) => r.status === 'pending');
+  const pendingReceived = receivedRequests.filter(
+    (r) => r.status === 'pending'
+  );
+
   const pendingSent = sentRequests.filter((r) => r.status === 'pending');
 
   return (
@@ -196,11 +241,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-[#E5B842]">✦</span>
             <span>My Team Hub</span>
           </div>
+
           <h1 className="text-2xl sm:text-4xl font-black font-display text-[#36241E]">
-            Dashboard: Projects & Teams
+            Dashboard: Projects &amp; Teams
           </h1>
+
           <p className="text-xs sm:text-sm text-[#543E36] font-mono mt-1 font-semibold">
-            Track your active teams, chat in real time, and monitor pending join requests.
+            Track your active teams, chat in real time, and monitor pending
+            join requests.
           </p>
         </div>
 
@@ -213,7 +261,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </button>
       </div>
 
-      {/* Segmented Tab Bar (Active Teams | Sent Requests | Incoming Requests) */}
+      {/* Segmented Tab Bar */}
       <div className="flex flex-wrap items-center gap-2 border-b-2 border-[#36241E]/20 pb-2">
         <button
           onClick={() => setActiveTab('active')}
@@ -237,6 +285,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <Send className="w-3.5 h-3.5" />
           <span>My Applications ({sentRequests.length})</span>
+
           {pendingSent.length > 0 && (
             <span className="w-2 h-2 rounded-full bg-[#9C4E1E] animate-ping" />
           )}
@@ -252,6 +301,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <Clock className="w-3.5 h-3.5" />
           <span>Incoming Requests</span>
+
           {pendingReceived.length > 0 && (
             <span className="px-1.5 py-0.2 bg-[#5B6838] text-[#F5EDE2] rounded-full text-[10px] font-black">
               {pendingReceived.length} new
@@ -268,12 +318,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="w-12 h-12 mx-auto rounded-full bg-[#DFB4C4] border-2 border-[#36241E] flex items-center justify-center text-xl text-[#36241E]">
                 ★
               </div>
+
               <h2 className="text-xl font-black font-display text-[#36241E]">
                 You have no active projects yet
               </h2>
+
               <p className="text-xs sm:text-sm font-mono text-[#543E36] max-w-md mx-auto font-medium">
-                Browse projects to apply for a role, or issue your own project ticket to build a team.
+                Browse projects to apply for a role, or issue your own project
+                ticket to build a team.
               </p>
+
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button
                   onClick={onCreateProject}
@@ -297,7 +351,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     className="rounded-3xl border-2 border-[#36241E] shadow-[5px_5px_0px_#36241E] p-4 sm:p-6 space-y-4 sm:space-y-5 relative overflow-hidden"
                   >
                     <div className="ticket-dashed-frame p-3 sm:p-4 space-y-4">
-                      {/* Top Header Row with prominent Chat Button */}
+                      {/* Top Header Row */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-dashed border-[#36241E]/30 pb-3">
                         <div>
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -309,13 +363,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 <span
                                   key={d}
                                   className="font-black px-2.5 py-0.5 rounded-full text-[10px] uppercase border border-[#36241E]"
-                                  style={{ backgroundColor: theme.badgeBg, color: theme.badgeText }}
+                                  style={{
+                                    backgroundColor: theme.badgeBg,
+                                    color: theme.badgeText,
+                                  }}
                                 >
                                   {d}
                                 </span>
                               ))}
                             </div>
-                            <span className="text-[#36241E]/40 font-black">/</span>
+
+                            <span className="text-[#36241E]/40 font-black">
+                              /
+                            </span>
+
                             {isLeader ? (
                               <span className="px-2.5 py-0.5 rounded-full bg-[#36241E] text-[#D9A83A] font-black text-[10px]">
                                 ★ PROJECT CAPTAIN
@@ -326,12 +387,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               </span>
                             )}
                           </div>
+
                           <h2 className="text-xl sm:text-2xl font-black font-display text-[#36241E]">
                             {project.title}
                           </h2>
                         </div>
 
-                        {/* HIGH VISIBILITY REAL-TIME CHAT BUTTON */}
+                        {/* Real-time chat button */}
                         <button
                           onClick={() => onOpenChat(project)}
                           className="px-5 py-2.5 rounded-full btn-retro-chocolate font-mono text-xs font-black uppercase flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_#231612]"
@@ -341,25 +403,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         </button>
                       </div>
 
-                      {/* LIVE GITHUB PROGRESS TRACKING */}
+                      {/* Live GitHub Progress Tracking */}
                       {project.githubRepo ? (
                         <div className="p-3.5 sm:p-4 rounded-2xl bg-[#EFE7D8] border-2 border-[#36241E] space-y-2.5 shadow-[2px_2px_0px_#36241E]">
                           <div className="flex items-center justify-between text-xs font-mono font-bold">
                             <div className="flex items-center gap-2 text-[#36241E]">
                               <Github className="w-4 h-4 text-[#36241E]" />
                               <span className="font-black">
-                                GitHub Progress: {stats ? `${stats.progressPct}%` : 'Pending sync'}
+                                GitHub Progress:{' '}
+                                {stats ? `${stats.progressPct}%` : 'Pending sync'}
                               </span>
                             </div>
+
                             <button
                               onClick={() => handleSyncGithub(project)}
                               disabled={syncingGh === project.id}
                               className="text-[11px] text-[#36241E] hover:underline flex items-center gap-1 font-mono font-bold cursor-pointer"
                             >
                               <RefreshCw
-                                className={`w-3 h-3 ${syncingGh === project.id ? 'animate-spin text-[#5B6838]' : ''}`}
+                                className={`w-3 h-3 ${
+                                  syncingGh === project.id
+                                    ? 'animate-spin text-[#5B6838]'
+                                    : ''
+                                }`}
                               />
-                              <span>{syncingGh === project.id ? 'Syncing...' : 'Sync Live Git'}</span>
+                              <span>
+                                {syncingGh === project.id
+                                  ? 'Syncing...'
+                                  : 'Sync Live Git'}
+                              </span>
                             </button>
                           </div>
 
@@ -375,15 +447,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                           <div className="flex flex-wrap items-center justify-between text-[11px] font-mono font-bold text-[#4A362F] pt-0.5">
                             <span>
-                              Live Commits: <strong>{stats?.recentCommits || 0}</strong>
+                              Live Commits:{' '}
+                              <strong>{stats?.recentCommits || 0}</strong>
                             </span>
+
                             {stats?.latestCommitMessage && (
                               <span className="truncate max-w-[260px] text-[#36241E]">
                                 Latest: "{stats.latestCommitMessage}"
                               </span>
                             )}
+
                             <a
-                              href={project.githubRepo.startsWith('http') ? project.githubRepo : `https://${project.githubRepo}`}
+                              href={
+                                project.githubRepo.startsWith('http')
+                                  ? project.githubRepo
+                                  : `https://${project.githubRepo}`
+                              }
                               target="_blank"
                               rel="noopener noreferrer"
                               className="underline text-[#5B6838] truncate max-w-[180px]"
@@ -400,23 +479,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               No GitHub repo connected yet.
                             </span>
                           </div>
+
                           {isLeader && (
                             <div className="flex items-center gap-2 w-full sm:w-auto">
                               <input
                                 type="text"
                                 placeholder="e.g. owner/repo or github link"
-                                value={editingRepoId === project.id ? customRepoInput : ''}
+                                value={
+                                  editingRepoId === project.id
+                                    ? customRepoInput
+                                    : ''
+                                }
                                 onChange={(e) => {
                                   setEditingRepoId(project.id);
                                   setCustomRepoInput(e.target.value);
                                 }}
                                 className="px-2.5 py-1 text-xs font-mono bg-[#FAF7F2] border border-[#36241E] rounded-lg flex-1 sm:w-52 text-[#36241E]"
                               />
+
                               <button
                                 type="button"
                                 onClick={() => {
                                   if (customRepoInput.trim()) {
-                                    handleSyncGithub(project, customRepoInput.trim());
+                                    handleSyncGithub(
+                                      project,
+                                      customRepoInput.trim()
+                                    );
                                     setEditingRepoId(null);
                                     setCustomRepoInput('');
                                   }
@@ -444,8 +532,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               />
                             ))}
                           </div>
+
                           <span className="text-[#36241E] text-[11px]">
-                            {project.members.length} of {project.maxMembers} seats boarded
+                            {project.members.length} of {project.maxMembers}{' '}
+                            seats boarded
                           </span>
                         </div>
 
@@ -474,6 +564,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <h2 className="text-lg font-black font-display text-[#36241E]">
               Applications I Sent to Other Teams ({sentRequests.length})
             </h2>
+
             <p className="text-xs font-mono text-[#543E36] font-semibold">
               Live status updates for teams you've applied to join.
             </p>
@@ -486,7 +577,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           ) : (
             <div className="space-y-3">
               {sentRequests.map((req) => {
-                const targetProject = projects.find((p) => p.id === req.projectId);
+                const targetProject = projects.find(
+                  (p) => p.id === req.projectId
+                );
+
                 return (
                   <div
                     key={req.id}
@@ -496,9 +590,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="font-black text-base text-[#36241E]">
                         {req.projectTitle}
                       </div>
+
                       <div className="text-[#36241E] mt-0.5 font-bold">
-                        Applied Role: <strong>{req.roleAppliedFor}</strong> · Submitted {new Date(req.createdAt).toLocaleDateString()}
+                        Applied Role: <strong>{req.roleAppliedFor}</strong> ·
+                        Submitted {new Date(req.createdAt).toLocaleDateString()}
                       </div>
+
                       {req.note && (
                         <div className="text-[11px] text-[#4A362F] mt-1 italic">
                           "{req.note}"
@@ -507,14 +604,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase border-2 border-[#36241E] shadow-[1px_1px_0px_#36241E] ${
-                        req.status === 'accepted'
-                          ? 'bg-[#5B6838] text-[#F5EDE2]'
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-black uppercase border-2 border-[#36241E] shadow-[1px_1px_0px_#36241E] ${
+                          req.status === 'accepted'
+                            ? 'bg-[#5B6838] text-[#F5EDE2]'
+                            : req.status === 'declined'
+                              ? 'bg-red-200 text-red-900'
+                              : 'bg-[#EFE7D8] text-[#36241E]'
+                        }`}
+                      >
+                        {req.status === 'accepted'
+                          ? '✓ Accepted'
                           : req.status === 'declined'
-                          ? 'bg-red-200 text-red-900'
-                          : 'bg-[#EFE7D8] text-[#36241E]'
-                      }`}>
-                        {req.status === 'accepted' ? '✓ Accepted' : req.status === 'declined' ? '✕ Declined' : '⏳ Pending Review'}
+                            ? '✕ Declined'
+                            : '⏳ Pending Review'}
                       </span>
 
                       {req.status === 'accepted' && targetProject && (
@@ -542,6 +645,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <h2 className="text-lg font-black font-display text-[#36241E]">
               Incoming Applications to My Projects ({receivedRequests.length})
             </h2>
+
             <p className="text-xs font-mono text-[#543E36] font-semibold">
               Fellow builders requesting admission to teams you captain.
             </p>
@@ -566,12 +670,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           alt={req.applicantName}
                           className="w-10 h-10 rounded-full object-cover border-2 border-[#36241E]"
                         />
+
                         <div>
                           <div className="font-black text-sm text-[#36241E]">
                             {req.applicantName}
                           </div>
+
                           <div className="text-xs font-mono text-[#36241E] font-bold">
-                            Applied for: <strong className="text-[#263311] underline">{req.roleAppliedFor}</strong> on {req.projectTitle}
+                            Applied for:{' '}
+                            <strong className="text-[#263311] underline">
+                              {req.roleAppliedFor}
+                            </strong>{' '}
+                            on {req.projectTitle}
                           </div>
                         </div>
                       </div>
@@ -580,13 +690,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <span className="px-3 py-0.5 rounded-full bg-[#36241E] text-[#D9A83A]">
                           ★ {req.matchScore}% Fit
                         </span>
-                        <span className={`px-3 py-0.5 rounded-full uppercase font-black text-[10px] border border-[#36241E] ${
-                          req.status === 'accepted'
-                            ? 'bg-[#5B6838] text-[#F5EDE2]'
-                            : req.status === 'declined'
-                            ? 'bg-red-200 text-red-900'
-                            : 'bg-[#DFB4C4] text-[#36241E]'
-                        }`}>
+
+                        <span
+                          className={`px-3 py-0.5 rounded-full uppercase font-black text-[10px] border border-[#36241E] ${
+                            req.status === 'accepted'
+                              ? 'bg-[#5B6838] text-[#F5EDE2]'
+                              : req.status === 'declined'
+                                ? 'bg-red-200 text-red-900'
+                                : 'bg-[#DFB4C4] text-[#36241E]'
+                          }`}
+                        >
                           {req.status}
                         </span>
                       </div>

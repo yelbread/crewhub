@@ -1,3 +1,4 @@
+
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
 
 export interface UserSkill {
@@ -135,7 +136,11 @@ export interface Project {
   colorTheme?: ProjectColorTheme;
   createdAt: string;
   updatedAt: string;
-  // Computed client-side / cached per user:
+
+  // Real-time typing status map: userId -> { name, timestamp }
+  typing?: Record<string, { name: string; timestamp: number }>;
+
+  // Computed client-side / cached per user
   matchScore?: number;
   matchReason?: string;
   matchDetails?: MatchDetails;
@@ -160,7 +165,14 @@ export interface JoinRequest {
   updatedAt: string;
 }
 
-export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'code' | 'file';
+export type MessageType =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'document'
+  | 'code'
+  | 'file';
 
 export interface CodeSnippet {
   language: string;
