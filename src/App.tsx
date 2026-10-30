@@ -60,38 +60,52 @@ function AppContent() {
     }
   }, [userProfile?.id, userProfile?.completedProfile]);
 
+  // Keep activeChatProject in sync with real-time projects collection
+  useEffect(() => {
+    if (activeChatProject) {
+      const fresh = projects.find((p) => p.id === activeChatProject.id);
+      if (fresh && fresh !== activeChatProject) {
+        setActiveChatProject(fresh);
+      }
+    }
+  }, [projects]);
+
   // When a leader accepts an applicant, update the project's roster in Firestore in real time
   const handleUpdateProjectRoster = async (projectId: string, newMember: any, filledRole: string) => {
-    setProjects((prev) =>
-      prev.map((proj) => {
-        if (proj.id === projectId) {
-          const updatedMembers = [...proj.members, newMember];
-          const updatedMemberIds = [...(proj.memberIds || []), newMember.userId];
-          const updatedOpenRoles = proj.openRoles.map((r) =>
-            r.role.toLowerCase() === filledRole.toLowerCase() ? { ...r, filled: true } : r
-          );
+    const proj = projects.find((p) => p.id === projectId);
+    if (!proj) return;
 
-          try {
-            updateDoc(doc(db, 'projects', projectId), {
-              members: updatedMembers,
-              memberIds: updatedMemberIds,
-              openRoles: updatedOpenRoles,
-              updatedAt: new Date().toISOString(),
-            });
-          } catch (e) {
-            console.warn('Update project roster error:', e);
-          }
-
-          return {
-            ...proj,
-            members: updatedMembers,
-            memberIds: updatedMemberIds,
-            openRoles: updatedOpenRoles,
-          };
-        }
-        return proj;
-      })
+    const updatedMembers = [...(proj.members || []), newMember];
+    const updatedMemberIds = Array.from(new Set([...(proj.memberIds || []), newMember.userId]));
+    const updatedOpenRoles = (proj.openRoles || []).map((r) =>
+      r.role.toLowerCase() === filledRole.toLowerCase()
+        ? { ...r, filled: true, filledBy: newMember.userId }
+        : r
     );
+
+    const updatedProj: Project = {
+      ...proj,
+      members: updatedMembers,
+      memberIds: updatedMemberIds,
+      openRoles: updatedOpenRoles,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProj : p)));
+    if (activeChatProject?.id === projectId) {
+      setActiveChatProject(updatedProj);
+    }
+
+    try {
+      await updateDoc(doc(db, 'projects', projectId), {
+        members: updatedMembers,
+        memberIds: updatedMemberIds,
+        openRoles: updatedOpenRoles,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('Update project roster error:', e);
+    }
   };
 
   const handleOpenChat = (project: Project) => {

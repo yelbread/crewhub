@@ -35,9 +35,12 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
 
   const theme = getProjectTheme(project.colorTheme);
 
-  const isAlreadyMember =
+  const isAlreadyMember = Boolean(
     userProfile &&
-    (project.leaderId === userProfile.id || project.memberIds.includes(userProfile.id));
+      (project.leaderId === userProfile.id ||
+        project.memberIds?.includes(userProfile.id) ||
+        project.members?.some((m) => m.userId === userProfile.id))
+  );
 
   const handleRequestToJoin = async (e: React.FormEvent) => {
     e.preventDefault();

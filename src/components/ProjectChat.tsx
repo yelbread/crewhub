@@ -8,6 +8,9 @@ import {
   onSnapshot,
   doc,
   setDoc,
+  updateDoc,
+  arrayUnion,
+  deleteField,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase.ts';
 import {
@@ -23,6 +26,9 @@ import {
   Flag,
   UserX,
   VolumeX,
+  Check,
+  CheckCheck,
+  Users,
 } from 'lucide-react';
 
 interface ProjectChatProps {
@@ -37,12 +43,19 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
   onRemoveMember,
 }) => {
   const { userProfile } = useAuth();
+  const [liveProject, setLiveProject] = useState<Project>(project);
 
   const [messages, setMessages] = useState<ProjectMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [safetyNoticeAcknowledged, setSafetyNoticeAcknowledged] = useState(true);
   const [moderationWarning, setModerationWarning] = useState<string | null>(null);
+
+  // Active roster popup modal
+  const [showRosterModal, setShowRosterModal] = useState(false);
+
+  // Typing timer ref
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Code snippet modal state
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -61,14 +74,29 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Live Firestore subscription for the project document so roster updates reflect immediately
+  useEffect(() => {
+    setLiveProject(project);
+    const projRef = doc(db, 'projects', project.id);
+    const unsub = onSnapshot(projRef, (snap) => {
+      if (snap.exists()) {
+        setLiveProject({ id: snap.id, ...snap.data() } as Project);
+      }
+    });
+    return () => unsub();
+  }, [project.id]);
+
   // Check membership: only accepted members or leader can read or write
-  const isMember =
+  const isMember = Boolean(
     userProfile &&
-    (project.leaderId === userProfile.id || project.memberIds.includes(userProfile.id));
+      (liveProject.leaderId === userProfile.id ||
+        liveProject.memberIds?.includes(userProfile.id) ||
+        liveProject.members?.some((m) => m.userId === userProfile.id))
+  );
 
-  const isLeader = userProfile?.id === project.leaderId;
+  const isLeader = userProfile?.id === liveProject.leaderId;
 
-  // Real-time Firestore Listener
+  // Real-time Firestore Listener for messages
   useEffect(() => {
     if (!isMember) return;
 
@@ -85,15 +113,81 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
         setMessages(list);
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+        }, 80);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `projects/${project.id}/messages`);
+        console.error('Real-time chat messages listener error:', error);
       }
     );
 
     return () => unsubscribe();
   }, [project.id, isMember]);
+
+  // Real-time Read Receipts: Mark unread messages as read by current user in Firestore
+  useEffect(() => {
+    if (!isMember || !userProfile || messages.length === 0) return;
+
+    messages.forEach((msg) => {
+      if (
+        msg.senderId !== userProfile.id &&
+        (!msg.readBy || !msg.readBy.includes(userProfile.id))
+      ) {
+        try {
+          updateDoc(doc(db, 'projects', project.id, 'messages', msg.id), {
+            readBy: arrayUnion(userProfile.id),
+          }).catch(() => {});
+        } catch (e) {
+          // non-blocking
+        }
+      }
+    });
+  }, [messages, userProfile?.id, project.id, isMember]);
+
+  // Real-time Typing Status management in project Firestore document
+  const clearTypingStatus = () => {
+    if (!userProfile) return;
+    try {
+      updateDoc(doc(db, 'projects', project.id), {
+        [`typing.${userProfile.id}`]: deleteField(),
+      }).catch(() => {});
+    } catch (e) {
+      // non-blocking
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputText(val);
+
+    if (!userProfile) return;
+
+    // Real-time typing status update in Firestore
+    try {
+      updateDoc(doc(db, 'projects', project.id), {
+        [`typing.${userProfile.id}`]: {
+          name: userProfile.fullName || userProfile.email?.split('@')[0] || 'Teammate',
+          timestamp: Date.now(),
+        },
+      }).catch(() => {});
+    } catch (err) {
+      // non-blocking
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      clearTypingStatus();
+    }, 3000);
+  };
+
+  // Clear typing status on unmount
+  useEffect(() => {
+    return () => {
+      clearTypingStatus();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, []);
 
   if (!isMember) {
     return (
@@ -103,7 +197,7 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
         </div>
         <h2 className="text-2xl font-black font-display text-[#36241E]">Team Room Restricted</h2>
         <p className="text-xs text-[#543E36] font-bold max-w-md mx-auto">
-          This real-time war-room is private to accepted members of {project.title}.
+          This real-time war-room is private to accepted members of {liveProject.title || project.title}.
           Submit a request to join this team from Browse Projects or open your active teams in Dashboard.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -118,14 +212,18 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
     );
   }
 
-  // Pre-send Gemini moderation gate
+  // Pre-send Gemini moderation gate with timeout fallback
   const moderateContent = async (text: string): Promise<boolean> => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
       const res = await fetch('/api/gemini/moderate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: text }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const result = await res.json();
         if (result.flagged) {
@@ -137,6 +235,7 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
       }
       return true;
     } catch (e) {
+      // Fail open if moderation service times out so messages are never dropped
       return true;
     }
   };
@@ -145,40 +244,50 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
     if (!text.trim() && !fileData) return;
     if (!userProfile) return;
 
+    clearTypingStatus();
+    const messageText = text.trim();
+    setInputText('');
     setSending(true);
     setModerationWarning(null);
 
-    if (text) {
-      const isClean = await moderateContent(text);
+    if (messageText) {
+      const isClean = await moderateContent(messageText);
       if (!isClean) {
+        setInputText(messageText);
         setSending(false);
         return;
       }
     }
 
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    const newMsg: ProjectMessage = {
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    
+    // CRITICAL: Only include defined values; Firestore rejects undefined values with an error
+    const newMsgPayload: Record<string, any> = {
       id: messageId,
       projectId: project.id,
       senderId: userProfile.id,
-      senderName: userProfile.fullName,
-      senderAvatar: userProfile.avatarUrl,
+      senderName: userProfile.fullName || userProfile.email?.split('@')[0] || 'Teammate',
+      senderAvatar: userProfile.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${userProfile.id}`,
       senderRole:
-        project.members.find((m) => m.userId === userProfile.id)?.role || 'Member',
+        liveProject.members?.find((m) => m.userId === userProfile.id)?.role ||
+        (liveProject.leaderId === userProfile.id ? 'Team Lead' : 'Member'),
       type,
-      text: text.trim(),
-      fileUrl: fileData?.url,
-      fileName: fileData?.name,
-      fileSize: fileData?.size,
-      codeSnippet: fileData?.codeSnippet,
+      text: messageText,
       createdAt: new Date().toISOString(),
     };
 
+    if (fileData?.url) newMsgPayload.fileUrl = fileData.url;
+    if (fileData?.name) newMsgPayload.fileName = fileData.name;
+    if (fileData?.size) newMsgPayload.fileSize = fileData.size;
+    if (fileData?.codeSnippet) newMsgPayload.codeSnippet = fileData.codeSnippet;
+
     try {
-      await setDoc(doc(db, 'projects', project.id, 'messages', messageId), newMsg);
-      setInputText('');
-    } catch (err) {
-      console.warn('Fallback saving chat message:', err);
+      const messageDocRef = doc(db, 'projects', project.id, 'messages', messageId);
+      await setDoc(messageDocRef, newMsgPayload);
+    } catch (err: any) {
+      console.error('Real-time chat write error:', err);
+      setModerationWarning(`Failed to send message: ${err?.message || 'Database write error'}`);
+      setInputText(messageText);
     } finally {
       setSending(false);
     }
@@ -271,28 +380,39 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
               </span>
             </div>
             <h1 className="text-2xl font-black font-display text-[#36241E] truncate max-w-md mt-0.5">
-              {project.title}
+              {liveProject.title || project.title}
             </h1>
           </div>
         </div>
 
-        {/* Member Avatars & Active Roster */}
-        <div className="flex items-center gap-2">
+        {/* Member Avatars & Active Roster (Clickable to view names) */}
+        <button
+          type="button"
+          onClick={() => setShowRosterModal(true)}
+          className="flex items-center gap-2 p-2 rounded-2xl border-2 border-[#36241E] bg-[#EFE7D8] hover:bg-[#DFB4C4] transition-all cursor-pointer shadow-[2px_2px_0px_#36241E] text-left group"
+          title="Click to view all members and roles in this team"
+        >
           <div className="flex -space-x-2">
-            {project.members.map((m) => (
+            {(liveProject.members || []).map((m) => (
               <img
                 key={m.userId}
-                src={m.avatarUrl}
+                src={m.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${m.userId}`}
                 alt={m.fullName}
                 title={`${m.fullName} (${m.role})`}
                 className="w-8 h-8 rounded-full object-cover border-2 border-[#36241E] shadow-[1px_1px_0px_#36241E]"
               />
             ))}
           </div>
-          <span className="text-xs font-mono text-[#36241E] pl-1 font-black">
-            {project.members.length} Hackers
-          </span>
-        </div>
+          <div className="pl-1">
+            <div className="text-xs font-mono text-[#36241E] font-black flex items-center gap-1 group-hover:underline">
+              <span>{(liveProject.members || []).length} Hackers</span>
+              <Users className="w-3.5 h-3.5 text-[#5B6838]" />
+            </div>
+            <span className="text-[10px] font-mono text-[#543E36] font-bold block leading-none">
+              Click to view names
+            </span>
+          </div>
+        </button>
       </div>
 
       {/* Code of Conduct Banner */}
@@ -447,6 +567,48 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
                         )}
                       </div>
                     )}
+
+                    {/* Real-time Read Receipts */}
+                    <div
+                      className={`flex items-center gap-1.5 text-[10px] font-mono mt-1.5 pt-1 border-t border-[#36241E]/15 ${
+                        isMe ? 'justify-end text-[#F5EDE2]/85' : 'justify-start text-[#543E36]'
+                      }`}
+                    >
+                      {isMe ? (
+                        (liveProject.members || []).filter(
+                          (m) => m.userId !== msg.senderId && (msg.readBy || []).includes(m.userId)
+                        ).length > 0 ? (
+                          <div
+                            className="flex items-center gap-1 font-bold text-[#F5EDE2]"
+                            title={`Seen by: ${(liveProject.members || [])
+                              .filter((m) => m.userId !== msg.senderId && (msg.readBy || []).includes(m.userId))
+                              .map((m) => m.fullName)
+                              .join(', ')}`}
+                          >
+                            <CheckCheck className="w-3.5 h-3.5 text-[#C8D6AE]" />
+                            <span>
+                              Seen by{' '}
+                              {(liveProject.members || [])
+                                .filter((m) => m.userId !== msg.senderId && (msg.readBy || []).includes(m.userId))
+                                .map((m) => m.fullName.split(' ')[0])
+                                .join(', ')}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 opacity-75">
+                            <Check className="w-3 h-3" />
+                            <span>Delivered</span>
+                          </div>
+                        )
+                      ) : (
+                        msg.readBy && msg.readBy.length > 0 && (
+                          <div className="flex items-center gap-1 opacity-80 font-bold">
+                            <CheckCheck className="w-3 h-3 text-[#5B6838]" />
+                            <span>Read</span>
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
 
                   {/* Moderation actions per message */}
@@ -495,6 +657,40 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Real-time Teammate is typing... Toast */}
+      {(() => {
+        const now = Date.now();
+        const typingList = Object.entries(liveProject.typing || {})
+          .filter(
+            ([userId, data]) =>
+              userId !== userProfile?.id &&
+              data &&
+              typeof data.timestamp === 'number' &&
+              now - data.timestamp < 5000
+          )
+          .map(([_, data]) => data.name || 'Teammate');
+
+        if (typingList.length === 0) return null;
+
+        return (
+          <div className="px-4 py-2.5 bg-[#DFB4C4] border-2 border-[#36241E] rounded-2xl flex items-center justify-between shadow-[3px_3px_0px_#36241E] text-xs font-mono font-bold text-[#36241E] animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <div className="flex items-center gap-2.5">
+              <span className="flex space-x-1 items-center">
+                <span className="w-2 h-2 bg-[#5B6838] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-2 h-2 bg-[#5B6838] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-2 h-2 bg-[#5B6838] rounded-full animate-bounce" />
+              </span>
+              <span className="font-black text-[#36241E]">
+                {typingList.join(', ')} {typingList.length === 1 ? 'is' : 'are'} typing...
+              </span>
+            </div>
+            <span className="text-[10px] font-mono uppercase bg-[#EFE7D8] px-2.5 py-0.5 rounded-full border border-[#36241E] text-[#543E36] font-black">
+              Live
+            </span>
+          </div>
+        );
+      })()}
+
       {/* Input bar (NO WHITE) */}
       <div className="bg-[#E5DBC8] border-2 border-[#36241E] rounded-3xl shadow-[5px_5px_0px_#36241E] p-3 sm:p-4 space-y-2">
         <form
@@ -533,7 +729,8 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
           <input
             type="text"
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={handleInputChange}
+            onBlur={clearTypingStatus}
             placeholder="Type a message to your team..."
             className="flex-1 px-4 py-2.5 text-xs font-mono font-bold bg-[#EFE7D8] border-2 border-[#36241E] rounded-full focus:outline-hidden text-[#36241E] placeholder:text-[#543E36]"
           />
@@ -699,6 +896,128 @@ export const ProjectChat: React.FC<ProjectChatProps> = ({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* TEAM ROSTER MODAL - SHOWS ALL HACKERS NAMES, ROLES & LIVE STATUS */}
+      {showRosterModal && (
+        <div
+          onClick={() => setShowRosterModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#36241E]/60 backdrop-blur-xs animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#E5DBC8] rounded-3xl border-2 border-[#36241E] shadow-[8px_8px_0px_#36241E] p-6 space-y-4 animate-in zoom-in-95 duration-150 relative"
+          >
+            <div className="flex items-center justify-between border-b-2 border-dashed border-[#36241E]/30 pb-3">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#C8D6AE] text-[#263311] border border-[#36241E] text-[10px] font-mono font-black uppercase tracking-wider mb-1">
+                  <span>★</span>
+                  <span>Active Crew Manifest</span>
+                </div>
+                <h3 className="font-black font-display text-xl text-[#36241E]">
+                  Hackers in this Team ({(liveProject.members || []).length})
+                </h3>
+                <p className="text-xs font-mono text-[#543E36] font-semibold mt-0.5">
+                  Verified builders boarded in {liveProject.title || project.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRosterModal(false)}
+                className="p-1.5 rounded-full bg-[#36241E] text-[#D9A83A] border-2 border-[#36241E] hover:bg-[#543E36] cursor-pointer"
+                title="Close Roster"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+              {(liveProject.members || []).map((m) => {
+                const isLeaderOfProj = m.userId === liveProject.leaderId;
+                const isUserMe = m.userId === userProfile?.id;
+                const now = Date.now();
+                const isUserTyping = Boolean(
+                  liveProject.typing?.[m.userId] &&
+                  typeof liveProject.typing[m.userId]?.timestamp === 'number' &&
+                  now - (liveProject.typing[m.userId]?.timestamp || 0) < 5000
+                );
+
+                return (
+                  <div
+                    key={m.userId}
+                    className="p-3 bg-[#EFE7D8] border-2 border-[#36241E] rounded-2xl flex items-center justify-between gap-3 shadow-[2.5px_2.5px_0px_#36241E]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <img
+                          src={m.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${m.userId}`}
+                          alt={m.fullName}
+                          className="w-11 h-11 rounded-full object-cover border-2 border-[#36241E] shadow-[1px_1px_0px_#36241E]"
+                        />
+                        <span
+                          className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-[#36241E] ${
+                            isUserTyping ? 'bg-[#5B6838] animate-ping' : 'bg-[#5B6838]'
+                          }`}
+                          title={isUserTyping ? 'Typing now...' : 'Active in team'}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-sm font-display text-[#36241E] truncate">
+                            {m.fullName}
+                          </span>
+                          {isUserMe && (
+                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-[#C8D6AE] text-[#263311] border border-[#36241E] font-bold">
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-mono text-[#543E36] font-semibold block truncate">
+                          {m.role || (isLeaderOfProj ? 'Team Lead' : 'Hacker')}
+                        </span>
+                        {isUserTyping ? (
+                          <span className="text-[10px] font-mono text-[#5B6838] font-black animate-pulse flex items-center gap-1 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#5B6838]" />
+                            <span>Typing message...</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-[#543E36]/70 block mt-0.5">
+                            Active in war-room
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      {isLeaderOfProj ? (
+                        <span className="px-2.5 py-1 rounded-full bg-[#DFB4C4] text-[#36241E] border border-[#36241E] text-[10px] font-mono font-black uppercase tracking-wider block shadow-[1px_1px_0px_#36241E]">
+                          ★ Lead
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full bg-[#E5DBC8] text-[#36241E] border border-[#36241E] text-[10px] font-mono font-bold block">
+                          Teammate
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t-2 border-dashed border-[#36241E]/30 flex items-center justify-between">
+              <span className="text-[10px] font-mono text-[#543E36] font-bold">
+                ✓ Full Team Access Granted
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowRosterModal(false)}
+                className="px-5 py-2 text-xs font-mono font-black uppercase rounded-full btn-retro-moss text-[#F5EDE2] cursor-pointer shadow-md"
+              >
+                Close Roster
+              </button>
+            </div>
           </div>
         </div>
       )}

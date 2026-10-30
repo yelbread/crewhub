@@ -134,7 +134,9 @@ export interface Project {
   location: 'remote' | 'in-person' | 'hybrid';
   colorTheme?: ProjectColorTheme;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+  // Real-time typing status map: userId -> { name, timestamp }
+  typing?: Record<string, { name: string; timestamp: number }>;
   // Computed client-side / cached per user:
   matchScore?: number;
   matchReason?: string;

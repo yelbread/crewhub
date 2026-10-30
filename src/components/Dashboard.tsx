@@ -51,7 +51,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Filter user's active projects (where user is leader OR member)
   const myProjects = projects.filter((p) => {
     if (!userProfile) return false;
-    return p.leaderId === userProfile.id || p.memberIds?.includes(userProfile.id);
+    return (
+      p.leaderId === userProfile.id ||
+      p.memberIds?.includes(userProfile.id) ||
+      p.members?.some((m) => m.userId === userProfile.id)
+    );
   });
 
   // Real-time Firestore listeners for Pending Requests
