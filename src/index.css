@@ -1,0 +1,304 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Exact Palette from Picture 1 */
+    --bg-canvas: #EFE7D8;
+    --bg-canvas-dark: #E5DBCA;
+    --color-moss: #5B6838;
+    --color-moss-light: #CAD8B4;
+    --color-moss-dark: #3F4A24;
+    --color-chocolate: #36241E;
+    --color-chocolate-dark: #231612;
+    --color-chocolate-light: #523B33;
+    --color-mauve: #CFA4B5;
+    --color-mauve-light: #E4C8D4;
+    --color-mauve-dark: #78485C;
+    --color-parchment: #DFD2BF;
+    --color-parchment-light: #EBE0CF;
+    --color-gold: #D9A83A;
+    --color-coral-ticket: #F5BFA8;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--color-chocolate);
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    /* Textured woven canvas / knit background pattern from Picture 1 */
+    background-image: 
+      radial-gradient(circle at 50% 50%, rgba(54, 36, 30, 0.08) 1.5px, transparent 1.5px),
+      linear-gradient(45deg, rgba(54, 36, 30, 0.02) 25%, transparent 25%, transparent 75%, rgba(54, 36, 30, 0.02) 75%),
+      linear-gradient(-45deg, rgba(54, 36, 30, 0.02) 25%, transparent 25%, transparent 75%, rgba(54, 36, 30, 0.02) 75%);
+    background-size: 20px 20px, 10px 10px, 10px 10px;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Fraunces', 'Bricolage Grotesque', serif;
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* ========================================================
+   RETRO TICKET & TACTILE PRINT EFFECTS (Picture 1 & Picture 2)
+   ======================================================== */
+
+/* Tactile 3D Offset Retro Buttons */
+.btn-retro-moss {
+  background: #5B6838;
+  color: #F5EDE2;
+  border: 2px solid #36241E;
+  box-shadow: 3.5px 3.5px 0px #36241E;
+  transition: all 0.15s ease-in-out;
+}
+.btn-retro-moss:hover {
+  background: #687740;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #36241E;
+}
+.btn-retro-moss:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #36241E;
+}
+
+.btn-retro-mauve {
+  background: #CFA4B5;
+  color: #36241E;
+  border: 2px solid #36241E;
+  box-shadow: 3.5px 3.5px 0px #36241E;
+  font-weight: 700;
+  transition: all 0.15s ease-in-out;
+}
+.btn-retro-mauve:hover {
+  background: #D9B1C1;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #36241E;
+}
+.btn-retro-mauve:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #36241E;
+}
+
+.btn-retro-chocolate {
+  background: #36241E;
+  color: #F5EDE2;
+  border: 2px solid #231612;
+  box-shadow: 3.5px 3.5px 0px #231612;
+  transition: all 0.15s ease-in-out;
+}
+.btn-retro-chocolate:hover {
+  background: #473028;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #231612;
+}
+.btn-retro-chocolate:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #231612;
+}
+
+.btn-retro-parchment {
+  background: #E5DAC8;
+  color: #36241E;
+  border: 2px solid #36241E;
+  box-shadow: 3.5px 3.5px 0px #36241E;
+  font-weight: 700;
+  transition: all 0.15s ease-in-out;
+}
+.btn-retro-parchment:hover {
+  background: #EFE6D6;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #36241E;
+}
+.btn-retro-parchment:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #36241E;
+}
+
+/* Backward-compatible class aliases pointing to the retro tactile system */
+.btn-liquid-moss {
+  background: #5B6838;
+  color: #F5EDE2;
+  border: 2px solid #36241E;
+  box-shadow: 3.5px 3.5px 0px #36241E;
+  transition: all 0.15s ease-in-out;
+}
+.btn-liquid-moss:hover {
+  background: #687740;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #36241E;
+}
+.btn-liquid-moss:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #36241E;
+}
+
+.btn-liquid-mauve {
+  background: #CFA4B5;
+  color: #36241E;
+  border: 2px solid #36241E;
+  box-shadow: 3.5px 3.5px 0px #36241E;
+  font-weight: 700;
+  transition: all 0.15s ease-in-out;
+}
+.btn-liquid-mauve:hover {
+  background: #D9B1C1;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #36241E;
+}
+.btn-liquid-mauve:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #36241E;
+}
+
+.btn-liquid-espresso {
+  background: #36241E;
+  color: #F5EDE2;
+  border: 2px solid #231612;
+  box-shadow: 3.5px 3.5px 0px #231612;
+  transition: all 0.15s ease-in-out;
+}
+.btn-liquid-espresso:hover {
+  background: #473028;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #231612;
+}
+.btn-liquid-espresso:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #231612;
+}
+
+.btn-liquid-secondary {
+  background: #E5DAC8;
+  color: #36241E;
+  border: 2px solid #36241E;
+  box-shadow: 3.5px 3.5px 0px #36241E;
+  font-weight: 700;
+  transition: all 0.15s ease-in-out;
+}
+.btn-liquid-secondary:hover {
+  background: #EFE6D6;
+  transform: translate(-1px, -1px);
+  box-shadow: 4.5px 4.5px 0px #36241E;
+}
+.btn-liquid-secondary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #36241E;
+}
+
+/* ========================================================
+   AUTHENTIC RETRO TICKET STYLING (Picture 2: Punit Pania Ticket)
+   ======================================================== */
+
+/* Inner dashed ticket frame */
+.ticket-dashed-frame {
+  border: 1.5px dashed rgba(54, 36, 30, 0.4);
+  border-radius: 1rem;
+}
+
+/* Circular punch holes on ticket perforated edges */
+.ticket-notch-top {
+  position: absolute;
+  top: -14px;
+  right: 33.333%;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background-color: var(--bg-canvas);
+  border: 2px solid #36241E;
+  z-index: 20;
+}
+
+.ticket-notch-bottom {
+  position: absolute;
+  bottom: -14px;
+  right: 33.333%;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background-color: var(--bg-canvas);
+  border: 2px solid #36241E;
+  z-index: 20;
+}
+
+.ticket-notch-left {
+  position: absolute;
+  top: 50%;
+  left: -14px;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background-color: var(--bg-canvas);
+  border: 2px solid #36241E;
+  z-index: 20;
+}
+
+.ticket-notch-right {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background-color: var(--bg-canvas);
+  border: 2px solid #36241E;
+  z-index: 20;
+}
+
+/* Vertical Rotated Serial Number Stamp (from Picture 2) */
+.ticket-vertical-serial {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.18em;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  user-select: none;
+}
+
+/* Stamp Badge Look */
+.ticket-stamp {
+  border: 1.5px dashed #36241E;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+/* Decorative background paper patterns */
+.pattern-stars {
+  background-image: radial-gradient(circle, rgba(54, 36, 30, 0.15) 1.5px, transparent 1.5px);
+  background-size: 14px 14px;
+}
+
+.pattern-stripes {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(54, 36, 30, 0.05),
+    rgba(54, 36, 30, 0.05) 5px,
+    transparent 5px,
+    transparent 10px
+  );
+}
+
+.pattern-dots {
+  background-image: radial-gradient(rgba(54, 36, 30, 0.12) 1.5px, transparent 1.5px);
+  background-size: 12px 12px;
+}
+
+.pattern-grid {
+  background-image: 
+    linear-gradient(to right, rgba(54, 36, 30, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(54, 36, 30, 0.06) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.pattern-cross {
+  background-image: 
+    radial-gradient(circle, rgba(54, 36, 30, 0.1) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
