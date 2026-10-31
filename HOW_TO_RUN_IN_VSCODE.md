@@ -121,6 +121,36 @@ Hold `Ctrl` (or `Cmd`) and click `http://localhost:3000/`, or paste it into your
 
 ---
 
+## How to Open the App on Another Computer / Phone
+
+`localhost` means "this exact machine". When you paste `http://localhost:3000` into another computer, that computer looks for port 3000 running on *itself*, which is why it cannot connect!
+
+To open the app on another computer or phone, choose any of these 3 methods:
+
+### Method 1: Use the Public Cloud Shared Link (Works Anywhere Worldwide)
+- Share this link with faculty or other computers:
+  ```text
+  https://ais-pre-pcs4pzjeoykxxn4oa2ladm-153429558450.asia-southeast1.run.app
+  ```
+- Works on any Wi-Fi, mobile network, laptop, or tablet. Both computers connect to the same live Firebase database in real time!
+
+### Method 2: Share Local Network IP (For Computers on the Same Wi-Fi)
+1. In your VS Code terminal, run:
+   ```bash
+   npm run ip
+   ```
+2. It will display your computer's Wi-Fi network address (for example `http://192.168.1.45:3000/`).
+3. Paste that exact URL (`http://<YOUR-IP>:3000/`) into the other computer's browser. Both computers will see the app live!
+
+### Method 3: VS Code Built-In Port Forwarding (Free & Secure)
+1. In VS Code, look at the bottom panel next to "Terminal" and click the **"Ports"** tab.
+2. Click **Add Port** and enter `3000`.
+3. Right-click port 3000 -> Set **Port Visibility** to **Public**.
+4. VS Code generates an `https://...app.github.dev` link.
+5. Copy that link and open it on any other computer in the world!
+
+---
+
 ## Step 6: How to Present Directly from VS Code to Faculty
 
 When demonstrating the project from VS Code:
@@ -131,7 +161,7 @@ When demonstrating the project from VS Code:
    - Open `server/api.ts` to show PBKDF2 password hashing and live GitHub REST API v3 integration.
 2. **Show the Database in Terminal**:
    - Run `npm run db:status` in the VS Code terminal to prove that the app is connected to a live Google Cloud Firestore NoSQL database storing real student documents.
-3. **Show Real-Time Synchronization**:
-   - Open two browser tabs side-by-side (`http://localhost:3000`).
-   - Create a project ticket in Tab 1; show it appearing immediately in Tab 2 without refreshing.
-   - Send a join request from Tab 2; show the leader dashboard in Tab 1 update with the applicant in real time.
+3. **Show Real-Time Synchronization Across Two Computers**:
+   - Computer A: Log in as Leader (create a project ticket).
+   - Computer B (or phone): Log in as Teammate (join the project and chat).
+   - Watch the updates, read receipts, and typing indicators appear instantly across both screens!
