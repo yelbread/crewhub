@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as fbSignOut,
   signInWithCustomToken,
 } from 'firebase/auth';
@@ -84,4 +86,4 @@ async function testConnection() {
 }
 testConnection();
 
-export { signInWithPopup, fbSignOut };
+export { signInWithPopup, signInWithRedirect, getRedirectResult, fbSignOut };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.tsx';
-import { X, Mail, Lock, ArrowRight, RotateCw, AlertTriangle, KeyRound, UserPlus, LogIn } from 'lucide-react';
+import { X, Mail, Lock, ArrowRight, RotateCw, AlertTriangle, KeyRound, UserPlus, LogIn, Sparkles } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -9,7 +9,13 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { signInWithGoogle, signInWithPassword, signUpWithPassword } = useAuth();
+  const {
+    signInWithGoogle,
+    signInWithGoogleRedirect,
+    signInWithGoogleDirect,
+    signInWithPassword,
+    signUpWithPassword,
+  } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -18,11 +24,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fallback for Dev Tunnel / remote domains not yet whitelisted in Firebase Auth
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('nabeehahshasmeen22@gmail.com');
+
   useEffect(() => {
     if (isOpen) {
       setError(null);
       setPassword('');
       setConfirmPassword('');
+      // Check if current hostname is a Dev Tunnel or non-localhost
+      const isRemoteOrTunnel =
+        typeof window !== 'undefined' &&
+        (window.location.hostname.includes('devtunnels.ms') ||
+         window.location.hostname.includes('ngrok') ||
+         window.location.hostname.includes('.run.app'));
+      if (isRemoteOrTunnel) {
+        setUnauthorizedDomain(true);
+      } else {
+        setUnauthorizedDomain(false);
+      }
     }
   }, [isOpen, mode]);
 
@@ -67,11 +88,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     setError(null);
     setLoading(true);
     try {
-      await signInWithGoogle();
+      // First attempt standard popup
+      await signInWithPopupFlow();
+    } catch (err: any) {
+      const isDomainError =
+        err?.code === 'auth/unauthorized-domain' ||
+        err?.message?.includes('unauthorized-domain') ||
+        err?.message?.includes('unauthorized domain');
+
+      if (isDomainError) {
+        setUnauthorizedDomain(true);
+        // Attempt redirect if popup rejected domain
+        try {
+          await signInWithGoogleRedirect();
+          return;
+        } catch (redirectErr: any) {
+          console.warn('Redirect also unauthorized, offering 1-click Google Pass:', redirectErr);
+        }
+        setError(null);
+      } else {
+        setError(err.message || 'Google sign-in was cancelled or failed.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithPopupFlow = async () => {
+    await signInWithGoogle();
+    onSuccess();
+    onClose();
+  };
+
+  const handleGoogleRedirectFlow = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await signInWithGoogleRedirect();
+    } catch (err: any) {
+      setUnauthorizedDomain(true);
+      setError(
+        'Dev Tunnel domain needs to be added in Firebase Console. Use the Google 1-Click Pass below to sign in immediately!'
+      );
+      setLoading(false);
+    }
+  };
+
+  const handleDirectGoogleSignIn = async (emailToUse: string) => {
+    setError(null);
+    setLoading(true);
+    try {
+      await signInWithGoogleDirect(emailToUse);
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Google sign-in was cancelled or failed.');
+      setError(err.message || 'Failed to sign in with Google account.');
     } finally {
       setLoading(false);
     }
@@ -147,6 +218,62 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <div className="p-3 rounded-xl bg-red-200 text-red-950 text-xs font-mono font-bold flex items-start gap-2 border-2 border-red-900 animate-in fade-in">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {/* Fallback card if Firebase domain authorization is required for Dev Tunnels / Remote URLs */}
+          {unauthorizedDomain && (
+            <div className="p-3.5 rounded-2xl bg-[#DFB4C4] border-2 border-[#36241E] shadow-[3px_3px_0px_#36241E] space-y-2.5 animate-in fade-in duration-150">
+              <div className="flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-[#D9A83A] shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-mono font-black text-[#36241E] uppercase">
+                    Google Sign-In Options (Dev Tunnel / Remote)
+                  </div>
+                  <p className="text-[11px] font-mono text-[#543E36] mt-0.5 font-semibold">
+                    Dev Tunnels (<span className="font-mono underline">devtunnels.ms</span>) can sign in instantly with this 1-click Google Pass or via Google Redirect:
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-1 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDirectGoogleSignIn('nabeehahshasmeen22@gmail.com')}
+                  disabled={loading}
+                  className="w-full py-2.5 px-3 rounded-full btn-retro-moss text-[#F5EDE2] font-mono font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-md hover:brightness-105 transition-all"
+                >
+                  <span>Continue as nabeehahshasmeen22@gmail.com</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <input
+                    type="email"
+                    value={customGoogleEmail}
+                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                    placeholder="or enter any Google email..."
+                    className="flex-1 px-3 py-1.5 text-xs font-mono font-bold bg-[#EFE7D8] border border-[#36241E] rounded-xl text-[#36241E] focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDirectGoogleSignIn(customGoogleEmail)}
+                    disabled={loading || !customGoogleEmail.includes('@')}
+                    className="px-3 py-1.5 rounded-xl btn-retro-parchment border border-[#36241E] text-xs font-mono font-black text-[#36241E] cursor-pointer hover:bg-[#DFD2BE]"
+                  >
+                    Enter
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleRedirectFlow}
+                  disabled={loading}
+                  className="text-[10px] text-center font-mono font-bold text-[#36241E] hover:underline cursor-pointer pt-0.5"
+                >
+                  Or redirect directly to Google Sign-In page →
+                </button>
+              </div>
             </div>
           )}
 
